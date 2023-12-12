@@ -17,6 +17,7 @@ def getDopplerShift(rvVector, absProj=[1,0,0], lambd=583e-9):
 
     v = rvVector[3:]
     k = 2*np.pi / lambd * absProj
+    #print(rvVector)
     DopplerShift = - sum(k*v)
     return DopplerShift
 
