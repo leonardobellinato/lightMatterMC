@@ -1,32 +1,29 @@
-# New Monte-Carlo suite of codes #
-# for simulation of atom dynamics inside # 
-# optical tweezer + light-matter interaction # 
-
-# Author: Daniel S. Grun #
-# Innsbruck, 2023 # 
+# Monte-Carlo simulation of dynamics inside the Tweezer with #
+# Photon absorption and Spontaneous emission in the presence of #
+# A light field #
+# Daniel S. Grun, Innsbruck 2023 #
 
 from new_MC_functions import *
 from photon_functions import *
-from energies_transitions import Gammas, Wls, alpha_GS
 import sys
 import numpy as np
-import argparse
 
-parser = argparse.ArgumentParser()
+arg_input = int(sys.argv[1])
+n_jobs=arg_input
+# n_jobs = 4
+Gamma583 = 2*np.pi * 180e3 # Gamma of the 583 nm transition (in Hz)
+Gamma841 = 2*np.pi * 8e3 # Gamma of the 841 nm transition (in Hz)
+Gamma626 = 2*np.pi * 135e3 # Gamma of the 626 nm transition (Dy) (in Hz)
+lambd583 = 583e-9
+lambd841 = 841e-9
+lambd626 = 626e-9
 
-parser.add_argument('-j', '--njobs', required=True, type=int, help='# of parallel jobs')
-parser.add_argument('-p', '--power', default=2, type=float, help='Tweezer power (mW)')
-parser.add_argument('-w', '--waist', default=1, type=float, help='Tweezer waist (um)')
-parser.add_argument('-wls', '--wavelengths', default=['583'], type=list, help='Wavelength of each beam (nm)')
-parser.add_argument('-s', '--sat', default=[1], type=list, help='Sat. parameter for each beam')
-parser.add_argument('-d', '--delta', default=[0], type=list, 
-                    help='Detuning from resonance for each beam (in terms of respective scattering length)')
-parser.add_argument('-tf', '--tfinal', default=30, type=float, help='Exposure time (ms)')
-parser.add_argument('-n', '--nsamples', default=100, type=int, help='# of samples')
+e0 = 8.85e-12
+c = 299792458
+hbar = 1.0545e-34
 
-args = parser.parse_args()
-
-n_jobs=args['njobs']
+conversion = 0.1482e-24 * 1.113e-16 # conversion from a.u. to S.I.
+alpha_GS = 430 * conversion # polarizability
 
 def checkLost(rvVector, P, w0):
     r = rvVector[:3]
@@ -35,10 +32,10 @@ def checkLost(rvVector, P, w0):
     kinEnergy = kineticEnergy(v)
     msg = potEnergy + kinEnergy
     return int(msg > 0)
-    
 
-def createSimulation_loss(P,T,w0,titf, s0=[0], lambd=[lambd583],
-                  Gamma=[Gamma583], absProj=[[1.0,0,0]], delta=[0], alphas=[1]):
+
+def createSimulation_loss(P,T,w0,titf, s0=0, lambd=lambd583,
+                  Gamma=Gamma583, absProj=[[1.0,0,0]], delta=0, alpha=[alpha_GS]):
     
 
     initialCond = generateInitialCond(P,T,w0,n_samples=1)
@@ -63,12 +60,12 @@ def createSimulation_loss(P,T,w0,titf, s0=[0], lambd=[lambd583],
         for i in range(len(absProj)):
 
             DopplerShift = getDopplerShift(sols, absProj[i], lambd[i])
-            acStarkShift = getAcStarkShift(sols, P, w0, alpha_E=alphas[i])
-            Delta = delta + DopplerShift + acStarkShift
+            acStarkShift = getAcStarkShift(sols, P, w0, alpha_E=alpha[i])
+            Delta = 2*np.pi*delta[i] + DopplerShift + acStarkShift
 
             # print(Delta/Gamma)
 
-            scattProb = Rscatt(Gamma[i], s0[i], Delta[i]) * dt
+            scattProb = Rscatt(Gamma[i], s0[i], Delta) * dt
             auxNum = np.random.rand()
             auxRatios.append(scattProb/auxNum)
             auxMasks.append(scattProb>auxNum)
@@ -84,6 +81,8 @@ def createSimulation_loss(P,T,w0,titf, s0=[0], lambd=[lambd583],
         lost = checkLost(initialCond, P, w0)
 
         if auxMasks[index]:
+            #print("Horizontal"*auxMasks[0] + "Vertical"*auxMasks[1])
+            #print("s0 = ", s0[index])
             sols[3:] = sols[3:] + recoilVel(absProj[index], lambd[index], case='absorption')
             initialCond = sols
             phScatt += auxMasks[index]
@@ -98,7 +97,7 @@ def createSimulation_loss(P,T,w0,titf, s0=[0], lambd=[lambd583],
 
                 initialCond = sols
 
-            sols[3:] = sols[3:] + recoilVel(absProj[index], lambd, case='emission')
+            sols[3:] = sols[3:] + recoilVel(absProj[index], lambd[index], case='emission')
             initialCond = sols
         
 
@@ -122,15 +121,15 @@ def createSimulation_loss(P,T,w0,titf, s0=[0], lambd=[lambd583],
     return solution
 
 
-def runSimulation_loss(P,T,w0,titf, s0=[0], lambd=[lambd583], Gamma=[Gamma583], absProj=[[1.0,0,0]], delta=[0], n_samples=1):
+def runSimulation_loss(P,T,w0,titf, s0=0, lambd=lambd583, Gamma=Gamma583, absProj=[[1.0,0,0]], delta=[0], alpha=[alpha_GS],n_samples=1):
     print(n_jobs)
-    results = Parallel(n_jobs=n_jobs)(delayed(createSimulation_loss)(P,T,w0,titf,s0,lambd,Gamma,absProj,delta)
+    results = Parallel(n_jobs=n_jobs)(delayed(createSimulation_loss)(P,T,w0,titf,s0,lambd,Gamma,absProj,delta, alpha)
                                                for i in tqdm(range(n_samples)))
     return results
         
 
-def survivalProb(P,T,w0,titf,s0=[0],lambd=[lambd583],Gamma=[Gamma583],absProj=[[1.0,0,0]],delta=[0],n_samples=1):
-    results = runSimulation_loss(P,T,w0,titf,s0,lambd,Gamma,absProj,delta,n_samples)
+def survivalProb(P,T,w0,titf,s0=0,lambd=lambd583,Gamma=Gamma583,absProj=[[1.0,0,0]],delta=[0],alpha=[alpha_GS], n_samples=1):
+    results = runSimulation_loss(P,T,w0,titf,s0,lambd,Gamma,absProj,delta,alpha,n_samples)
     results = np.array(results)
     surv = results[:,0]
     phScatt = results[:,2]
@@ -139,56 +138,63 @@ def survivalProb(P,T,w0,titf,s0=[0],lambd=[lambd583],Gamma=[Gamma583],absProj=[[
 
 if __name__ == "__main__":
     
-    Gamma = [Gammas[name] for name in args['wavelengths']]
-    lambd = [Wls[name] for name in args['wavelengths']]
+    Gamma1 = Gamma583
+    lambd1 = lambd583
+
+    Gamma2 = Gamma841
+    lambd2 = lambd841
     
-    P = 1e-3 * args['power'] # trap power, in W
-    w0 = 1e-6 * args['waist'] # trap waist, in um
-    s0 = args['sat'] # near-resonant field, saturation parameter 
-    dParam = args['delta']
-    delta = [dParam[i] * Gamma[i] for i in range(len(Gamma))]
-    
+    P = 2.4e-3 # trap power, in W
+    T = 20e-6 # temperature, in K
+    w0 = 1.0e-6 # trap waist, in um
+    s0 = 0.5 # near-resonant field, saturation parameter
+
+    alpha_E = 1*alpha_GS
+
+    dParam1 = 1.5
+    dParam2 = -80
+    delta1 = -dParam1*180e3 # detuning from resonance, in Hz
+    delta2 = -dParam2*8e3 # detuning from resonance, in Hz
+
     t0 = 0
-    tf = args['tfinal']
+    tf = 70e-3
     dt = 1e-8
     titf = [t0, tf, dt]
     
-    n_samples = args['nsamples']
+    n_samples = int(300)
     
-    def checkSurvProjZ(absZ):
-        absProj = [[1.0, 0, absZ], [0,1.0,absZ]] # needs to have same length as gammas/lambds/# of beams
-        result = survivalProb(P,T,w0,titf,s0,lambd,Gamma,absProj,delta,n_samples)
+    def checkSurvIntVert(sScan):
+        absProj = [[1.0, 0, 0.18],
+                    [0, 0, -1.0]]
+        result = survivalProb(P,T,w0,titf,[s0,sScan],[lambd1, lambd2], [Gamma1, Gamma2],absProj,[delta1, delta2], [alpha_GS, alpha_GS], n_samples)
         return result
-    
-    def checkSurvTime(tf):
-        titf = [t0, tf, dt]
-        absProj = [[1.0, 0, 0.4], [0, 1.0, 0.4]] # needs to have same length as gammas/lambds/# of beams
-        result = survivalProb(P,T,w0,titf,s0,lambd,Gammas,absProj,delta,n_samples)
-        return result
-    
-    absZ_scan = np.arange(0,0.4+0.05,0.1)
-    tf_scan = np.arange(10,100+5, 10)*1e-3
-    # absZ_scan = np.array([0,0.05,0.1,0.15,0.2])
-    # absZ_scan = [0.2]
-    # delta_scan = np.linspace(-3,3,10) * 180e3
-    print(n_jobs)
-    #result = np.array([checkSurvProjZ(absZ_scan[i]) 
-    #            for i in tqdm(range(len(absZ_scan)))])
-    result = np.array([checkSurvTime(tf_scan[i])
-                for i in tqdm(range(len(tf_scan)))])
 
-    # result = Parallel(n_jobs=4)(delayed(checkSurvDelta)(delta_scan[i]) 
-    #                             for i in tqdm(range(len(delta_scan))))
+    def checkSurvDeltaVert(dScan):
+        absProj = [[1.0, 0, 0.18], [0, 0, 1.0]]
+        s2 = 10
+        delta2 = -dScan*8e3 # how many linewidth of detuning? 
+        result = survivalProb(P,T,w0,titf,[s0,s2],[lambd1,lambd2],[Gamma1,Gamma2],absProj,[delta1,delta2], [alpha_GS,0.75*alpha_GS], n_samples)
+        return result
+
+    #vertBeamInt_scan = np.arange(0,0.3,0.03)
+    vertBeamD_scan = -np.arange(80,83,0.25)
+
+    print(n_jobs)
+    #result = np.array([checkSurvIntVert(vertBeamInt_scan[i]) 
+    #            for i in tqdm(range(len(vertBeamInt_scan)))])
     
-    abszAngle = np.array([np.arcsin(i/np.sqrt(2+i**2)) for i in absZ_scan])
-    abszAngle *= 180/np.pi
-    
+    # result = np.array([checkSurvDeltaVert(vertBeamD_scan[i])
+    #             for i in tqdm(range(len(vertBeamD_scan)))])
+
+    result = createSimulation_loss(P,T,w0,titf, s0=[0.8], lambd=[lambd583],
+                      Gamma=[Gamma583], absProj=[[1.0,0,0.3]], delta=[-1.5*180e3], alpha=[alpha_GS])
+
     result = np.array(result)  
     
     # direct = 'C:\\Users\\x2241135\\Desktop\\PhD\\codes\\new_monteCarlo\\results\\'
     # name = 'result_delta_m{0:1.0f}_sat{1:1.0f}_tf{2:1.0f}.txt'.format(dParam, s0, 1e3*tf)
     
-    np.save('result_expTimeScan_20degZ_bothBeams_sover2.npy', result)
+    np.save('resultEr_1horBeam_1vert841Beam_dm1-5_dmFinerScan_s0-5_s100_70ms.npy', result)
     
     # np.savetxt(direct+name, np.c_[abszAngle, result])
     

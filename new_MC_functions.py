@@ -1,16 +1,14 @@
 # New Monte-Carlo suite of codes #
-# for simulation of atom dynamics inside # 
-# optical tweezer + light-matter interaction # 
-
-# Author: Daniel S. Grun #
-# Innsbruck, 2023 # 
+# Includes definitions of ODT potential, RK4 time-evol.,
+# AC-Stark shift, recoil from photon abs./re-emission etc. #
+# Daniel S. Grun, Innsbruck 2023
 
 import numpy as np
 from tqdm import tqdm
 from joblib import Parallel, delayed 
 from photon_functions import *
 
-amu = 1.66e-27 # Atomic mass unit --> kg
+amu = 1.66e-27 # Atomic ma87ss unit --> kg
 m = 166 * amu # Erbium166 isotope mass in kg
 # m = 87 * amu # Rb
 kB = 1.38e-23 # Boltzmann constant, m^2 kg s^-2 K^-1
@@ -34,7 +32,6 @@ def generateInitialCond(P,T,w0,n_samples=int(1e3),alpha=alpha_GS,lambd=lambd_tra
     zR = np.pi*w0**2/lambd
 
     T = 0.1 * u0/kB
-    # T = 1e-6
 
     omega_perp = np.sqrt(4*u0/(m*w0**2)) # radial trap frequency, Hz
     omega_par = np.sqrt(2*u0/(m*zR**2)) # longitudinal trap frequency, Hz  
@@ -78,12 +75,12 @@ def kineticEnergy(v):
     return m/2 * sum(abs(v)**2)
 
 
-def trapEvol(rvVector, P, w0, alpha=alpha_GS):
+def trapEvol(rvVector, P, w0):
     r = rvVector[:3]
     v = rvVector[3:]
     DrDt = [0]*6
     U = trapPotential(r,P,w0)
-    
+
     ax,ay,az = trapPotDerivs(r,U,w0)
     
     for i in range(3):
@@ -94,7 +91,7 @@ def trapEvol(rvVector, P, w0, alpha=alpha_GS):
     return np.array(DrDt)
 
 
-def odeRK45_solver(rvFunc, y0, dt, P, w0, alpha=alpha_GS):
+def odeRK45_solver(rvFunc, y0, dt, P, w0):
     k1 = dt * rvFunc(y0, P, w0)
     k2 = dt * rvFunc(y0+0.5*k1, P, w0)
     k3 = dt * rvFunc(y0+0.5*k2, P, w0)
@@ -107,7 +104,7 @@ def getAcStarkShift(rvVector, P, w0, alpha_E):
     r = rvVector[:3]
     U_g = trapPotential(r, P, w0)
     U_e = trapPotential(r, P, w0, alpha=alpha_E)
-    acStarkShift = (U_e-U_g)/hbar
+    acStarkShift = -(U_e-U_g)/hbar
     return acStarkShift
 
 def recoilVel(absProj, lambd, case):
@@ -118,14 +115,10 @@ def recoilVel(absProj, lambd, case):
     spontDir = 1-2*np.random.random((3))
     spontDir /= np.sqrt(sum(abs(spontDir)**2))
     
-    recoilDir = absProj*(case=='absorption') + spontDir*(case == 'emission')
-    
-    # print('abs=', case=='absorption', 'emi=', case=='emission')
+    recoilDir = absProj*(case=='absorption')+spontDir*(case=='emission')
     
     k = 2*np.pi / lambd
     phRecoil = hbar*k/m * recoilDir
-    
-    # print(phRecoil)
 
     return phRecoil
 
