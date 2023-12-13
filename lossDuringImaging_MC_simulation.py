@@ -30,18 +30,18 @@ conversion = 0.1482e-24 * 1.113e-16 # conversion from a.u. to S.I.
 alpha_GS = 430 * conversion # polarizability
 
 '''Functions'''
-def checkLost(rvVector, P, w0, a):
+def checkLost(rvVector, P, w0, a,PotFlag):
     r1 = rvVector[:3]
     v1 = rvVector[3:6]
     r2 = rvVector[6:9]
     v2 = rvVector[9:12]
     
     if a == 0:
-        potEnergy = trapPotential(r1, r2,P,w0)
+        potEnergy = trapPotential(r1, r2,P,w0,PotFlag)
         kinEnergy = kineticEnergy(v1)
         msg = potEnergy + kinEnergy
     else:
-        potEnergy = trapPotential(r2, r1,P,w0)
+        potEnergy = trapPotential(r2, r1,P,w0,PotFlag)
         kinEnergy = kineticEnergy(v2)
         msg = potEnergy + kinEnergy
         
@@ -79,8 +79,10 @@ def createSimulation_loss(P,T,w0,titf, s0=0, lambd=lambd583,
         
         #a = trapEvol(initialCond, P, w0)
         #print(a)
+        PotFlag = 0
+        #print(PotFlag)
         
-        sols = odeRK45_solver(trapEvol, initialCond, dt, P, w0, currentTime)
+        sols = odeRK45_solver(trapEvol, initialCond, dt, P, w0, currentTime, PotFlag)
         sols = np.array(sols[-1])
         
         #print(sols)
@@ -94,7 +96,7 @@ def createSimulation_loss(P,T,w0,titf, s0=0, lambd=lambd583,
         
         print(initialCond)
         
-       # solution.append(initialCond)
+        solution.append(initialCond)
         
         for i in range(len(absProj)):
           
@@ -139,14 +141,15 @@ def createSimulation_loss(P,T,w0,titf, s0=0, lambd=lambd583,
         auxRatio = max(auxRatios)
         index = auxRatios.index(auxRatio)
           
-        lost = checkLost(initialCond, P, w0, a)
+        lost = checkLost(initialCond, P, w0, a,PotFlag)
         currentTime += dt
         
         #lost = checkLost(initialCond, P, w0)
 ##################################################################################################
         if auxMasks[index]:
             
-          #  PotFlag = True 
+            PotFlag = 1 
+            #print(PotFlag)
             
             solsw[3:6] = solsw[3:6] + recoilVel(absProj[index], lambd, case='absorption')
                 
@@ -154,26 +157,20 @@ def createSimulation_loss(P,T,w0,titf, s0=0, lambd=lambd583,
                 initialCond[:6] = solsw
             else:
                 initialCond[6:12] = solsw
-            #solution.append(initialCond)
+            solution.append(initialCond)
             #initialCond = sols
             phScatt += auxMasks[index]
             waitTime = np.random.exponential(scale=1/Gamma)
             passedTime = 0
             while passedTime < waitTime:
-                sols = odeRK45_solver(trapEvol, initialCond, dt, P, w0, currentTime)      #trapEvol, initialCond, dt, P, w0)
+                sols = odeRK45_solver(trapEvol, initialCond, dt, P, w0, currentTime, PotFlag)      #trapEvol, initialCond, dt, P, w0)
                 sols = np.array(sols[-1])
 
                 currentTime += dt
                 passedTime += dt
                 
-                '''HALLOOOOO'''  
-                #if a == 0:
-                #    initialCond[:6] = solsw
-                #else:
-                #    initialCond[6:12] = solsw
-                    
                 initialCond = sols
-                #solution.append(initialCond)
+                solution.append(initialCond)
             if a == 0:
                 solsw = sols[:6]
 
@@ -187,27 +184,27 @@ def createSimulation_loss(P,T,w0,titf, s0=0, lambd=lambd583,
             else:
                 initialCond[6:12] = solsw
                 
-            #solution.append(initialCond)
+            solution.append(initialCond)
 
 ##################################################################################################      
 
         # print(phScatt)
         
-        if lost:
-            lostTime = currentTime
-            currentTime = tf+1
+        # if lost:
+        #     lostTime = currentTime
+        #     currentTime = tf+1
             
-            # print("Atom lost after {} us of illumination".format(np.round(1e6*lostTime, 2)))
-            solution.append(1-lost)
-            solution.append(lostTime)
-            solution.append(phScatt)
+        #     # print("Atom lost after {} us of illumination".format(np.round(1e6*lostTime, 2)))
+        #     solution.append(1-lost)
+        #     solution.append(lostTime)
+        #     solution.append(phScatt)
             
-        else:
-            # print("currentTime = {} us".format(np.round(1e6*currentTime, decimals=2)))
-            if currentTime >= tf:            
-                solution.append(1-lost)
-                solution.append(currentTime)    
-                solution.append(phScatt)
+        # else:
+        #     # print("currentTime = {} us".format(np.round(1e6*currentTime, decimals=2)))
+        #     if currentTime >= tf:            
+        #         solution.append(1-lost)
+        #         solution.append(currentTime)    
+        #         solution.append(phScatt)
         
 
             
@@ -237,6 +234,7 @@ def survivalProb(P,T,w0,titf,s0=0,lambd=lambd583,Gamma=Gamma583,absProj=[[1.0,0,
 ##################################################################################################
 
 '''Run code'''
+
 if __name__ == "__main__":
     
     Gamma = Gamma583
@@ -250,11 +248,11 @@ if __name__ == "__main__":
     delta = -dParam*180e3 # detuning from resonance, in Hz
     
     t0 = 0
-    tf = 1e-3 #30e-3
+    tf = 1e-3#30e-3
     dt = 1e-8
     titf = [t0, tf, dt]
     
-    n_samples = int(10) #1000
+    n_samples = int(1)#1000
     
     def checkSurvProjZ(absZ):
         absProj = [[1.0, 0, absZ]]
@@ -284,16 +282,15 @@ if __name__ == "__main__":
     abszAngle = np.array([np.arcsin(i/np.sqrt(2+i**2)) for i in absZ_scan])
     abszAngle *= 180/np.pi
     
-    #result = np.array(result)  
+    result = np.array(result)  
     
     # direct = 'C:\\Users\\x2241135\\Desktop\\PhD\\codes\\new_monteCarlo\\results\\'
     # name = 'result_delta_m{0:1.0f}_sat{1:1.0f}_tf{2:1.0f}.txt'.format(dParam, s0, 1e3*tf)
     
-   # np.save('resultEr_absZscan.npy', result)
+    np.save('resultEr_absZscan.npy', result)
     
     # np.savetxt(direct+name, np.c_[abszAngle, result])
-    
-    
+   
 
             
         

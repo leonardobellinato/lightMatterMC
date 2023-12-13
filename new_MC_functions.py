@@ -58,22 +58,38 @@ def generateInitialCond(P,T,w0,n_samples=int(1e3),alpha=alpha_GS,lambd=lambd_tra
 
 
 
-def trapPotential(r1,r2,P,w0,alpha=alpha_GS, lambd=lambd_trap):
+def trapPotential(r1,r2,P,w0,PotFlag,alpha=alpha_GS, lambd=lambd_trap):
     x1,y1,z1 = r1
     x2,y2,z2 = r2
     U0 = P*alpha / (np.pi * e0 * c * w0**2)
     zR = np.pi * w0**2 / lambd
     
-    C3 = 0.114 #Antonio notes in amu -> convert to SI
-    C6 = 2
+    if PotFlag == 1:
+        #print(x1-x2)
+        C3 = 1.47797e-48  #Antonio notes in amu -> convert to SI
+        rr = np.sqrt((x1-x2)**2+(y1-y2)**2+(z1-z2)**2)
+        LJ = C3/(rr**3)
+        U = -U0/(1+(z1/zR)**2) * np.exp(-2/(w0**2) * (x1**2 + y1**2) / (1+(z1/zR)**2)) + LJ
+        print(U-U0/(1+(z1/zR)**2) * np.exp(-2/(w0**2) * (x1**2 + y1**2) / (1+(z1/zR)**2)))
+    else:
+        U = -U0/(1+(z1/zR)**2) * np.exp(-2/(w0**2) * (x1**2 + y1**2) / (1+(z1/zR)**2))
+   
+    #C6 = 2
     #Vector between first and second atom
-    r12 = np.sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2)
-    #Adding potential from second atom (last term)
-    U = -U0/(1+(z1/zR)**2) * np.exp(-2/(w0**2) * (x1**2 + y1**2) / (1+(z1/zR)**2)) #+ ((C3/r12**3) - (C6/r12**6))
+    # if PotFlag == 1:
+    #      r12 = np.sqrt((x1-x2)**2+(y1-y2)**2+(z1-z2)**2)
+    #      a = (C3/r12**3)
+    #      print(x1, x2)
+    #      #Adding potential from second atom (last term)
+    #      U = -U0/(1+(z1/zR)**2) * np.exp(-2/(w0**2) * (x1**2 + y1**2) / (1+(z1/zR)**2)) + a #- (C6/r12**6))
+    # else:
+    #      U = -U0/(1+(z1/zR)**2) * np.exp(-2/(w0**2) * (x1**2 + y1**2) / (1+(z1/zR)**2))
+   
+    #U = -U0/(1+(z1/zR)**2) * np.exp(-2/(w0**2) * (x1**2 + y1**2) / (1+(z1/zR)**2))
     return U
 
-
-def trapPotDerivs(r1,r2,U,w0,lambd=lambd_trap):
+'''Need to add the derivatives'''
+def trapPotDerivs(r1,r2,U,w0,PotFlag,lambd=lambd_trap):
     x1,y1,z1 = r1
     x2,y2,z2 = r2
     zR = np.pi*w0**2/lambd
@@ -89,7 +105,7 @@ def kineticEnergy(v):
     return m/2 * sum(abs(v)**2)
 
 
-def trapEvol(rvVector, t, P, w0):
+def trapEvol(rvVector, t, P, w0, PotFlag):
     DrDt = [0]*6*2
     
     r1 = rvVector[:3]
@@ -98,9 +114,9 @@ def trapEvol(rvVector, t, P, w0):
     v2 = rvVector[9:12]
     
     DrDt1 = [0]*6
-    U1 = trapPotential(r1,r2,P,w0)
+    U1 = trapPotential(r1,r2,P,w0,PotFlag)
 
-    ax1,ay1,az1 = trapPotDerivs(r1,r2,U1,w0)
+    ax1,ay1,az1 = trapPotDerivs(r1,r2,U1,w0,PotFlag)
     
     for i in range(3):
         DrDt1[i] = v1[i]
@@ -108,9 +124,9 @@ def trapEvol(rvVector, t, P, w0):
     DrDt1[3] = ax1; DrDt1[4] = ay1; DrDt1[5] = az1 - g
     
     DrDt2 = [0]*6
-    U2 = trapPotential(r2,r1,P,w0)
+    U2 = trapPotential(r2,r1,P,w0,PotFlag)
 
-    ax2,ay2,az2 = trapPotDerivs(r2,r1,U2,w0)
+    ax2,ay2,az2 = trapPotDerivs(r2,r1,U2,w0,PotFlag)
     
     for i in range(3):
         DrDt2[i] = v2[i]
@@ -131,7 +147,7 @@ def trapEvol(rvVector, t, P, w0):
     # print(rvVector)
     return DrDt #np.array(DrDt) 
 
-def odeRK45_solver(rvFunc, y0, dt, P, w0, currentTime):
+def odeRK45_solver(rvFunc, y0, dt, P, w0, currentTime, PotFlag):
     #k1 = dt * rvFunc(y01, P, w0)
     #k2 = dt * rvFunc(y01+0.5*k1, P, w0)
     #k3 = dt * rvFunc(y01+0.5*k2, P, w0)
@@ -140,7 +156,7 @@ def odeRK45_solver(rvFunc, y0, dt, P, w0, currentTime):
     
     #Using "new" method to solve the system
     #y1 = solve_ivp(rvFunc, [currentTime,currentTime+dt], y0, method='RK45', dense_output=False, args=(P, w0))
-    y1 = odeint(rvFunc, y0, [0,dt], args=(P, w0))
+    y1 = odeint(rvFunc, y0, [0,dt], args=(P, w0, PotFlag))
     
     return y1
 
