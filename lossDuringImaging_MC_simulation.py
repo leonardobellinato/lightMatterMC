@@ -14,6 +14,8 @@ from new_MC_functions import *
 from photon_functions import *
 import sys
 import numpy as np
+import os
+
 
 '''Useful parameters and inputs'''
 arg_input = 1 #int(sys.argv[1])
@@ -234,8 +236,79 @@ def survivalProb(P,T,w0,titf,s0=0,lambd=lambd583,Gamma=Gamma583,absProj=[[1.0,0,
 ##################################################################################################
 
 '''Run code'''
-
 if __name__ == "__main__":
+    
+    Gamma = Gamma583
+    lambd = lambd583
+    
+    P = 2.4e-3 # trap power, in W
+    T = 20e-6 # temperature, in K
+    w0 = 1.0e-6 # trap waist, in um
+    s0 = 0.8 # near-resonant field, saturation parameter 
+    dParam = 1
+    delta = -dParam*180e3 # detuning from resonance, in Hz
+    
+    t0 = 0
+    tf = 1e-3
+    dt = 1e-8
+    titf = [t0, tf, dt]
+    
+    n_samples = int(100) #1000
+    
+    def checkSurvProjZ(absZ):
+        absProj = [[1.0, 0, absZ]]
+        result = survivalProb(P,T,w0,titf,s0,lambd,Gamma,absProj,delta,n_samples)
+        return result
+    
+    def checkSurvTime(tf):
+        titf = [t0, tf, dt]
+        absProj = [[1.0, 0, 0.4]]
+        result = survivalProb(P,T,w0,titf,s0,lambd,Gamma,absProj,delta,n_samples)
+        return result
+    
+    #absZ_scan = np.arange(0,0.4+0.05,0.1)
+    absZ_scan = np.arange(0,0.4,0.4)
+    #tf_scan = np.arange(10,100+5, 10)*1e-3
+    tf_scan = np.arange(10,100+5, 95)*1e-3
+    # absZ_scan = np.array([0,0.05,0.1,0.15,0.2])
+    # absZ_scan = [0.2]
+    # delta_scan = np.linspace(-3,3,10) * 180e3
+    print(n_jobs)
+    #result = np.array([checkSurvProjZ(absZ_scan[i]) 
+    #            for i in tqdm(range(len(absZ_scan)))])
+    result = checkSurvProjZ(0.4)
+    file = open("data_beta_test.txt", "w+")
+    file.write(str(result))
+    file.close()
+    #result = np.array([checkSurvTime(tf_scan[i])
+    #            for i in tqdm(range(len(tf_scan)))])
+
+    # result = Parallel(n_jobs=4)(delayed(checkSurvDelta)(delta_scan[i]) 
+    #                             for i in tqdm(range(len(delta_scan))))
+    
+    abszAngle = np.array([np.arcsin(i/np.sqrt(2+i**2)) for i in absZ_scan])
+    abszAngle *= 180/np.pi
+    
+    #result = np.array(result)  
+    
+    # direct = 'C:\\Users\\x2241135\\Desktop\\PhD\\codes\\new_monteCarlo\\results\\'
+    # name = 'result_delta_m{0:1.0f}_sat{1:1.0f}_tf{2:1.0f}.txt'.format(dParam, s0, 1e3*tf)
+    
+   # np.save('resultEr_absZscan.npy', result)
+    
+    # np.savetxt(direct+name, np.c_[abszAngle, result])
+       
+    
+##################################################################################################
+##################################################################################################
+##################################################################################################    
+'''Run code'''
+'''
+if __name__ == "__main__":
+    
+    
+    print("Hey, I am Phillip")
+    print("")
     
     Gamma = Gamma583
     lambd = lambd583
@@ -290,7 +363,7 @@ if __name__ == "__main__":
     np.save('resultEr_absZscan.npy', result)
     
     # np.savetxt(direct+name, np.c_[abszAngle, result])
-   
+  ''' 
 
             
         

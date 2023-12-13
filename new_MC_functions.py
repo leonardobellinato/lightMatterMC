@@ -70,7 +70,7 @@ def trapPotential(r1,r2,P,w0,PotFlag,alpha=alpha_GS, lambd=lambd_trap):
         rr = np.sqrt((x1-x2)**2+(y1-y2)**2+(z1-z2)**2)
         LJ = C3/(rr**3)
         U = -U0/(1+(z1/zR)**2) * np.exp(-2/(w0**2) * (x1**2 + y1**2) / (1+(z1/zR)**2)) + LJ
-        print(U-U0/(1+(z1/zR)**2) * np.exp(-2/(w0**2) * (x1**2 + y1**2) / (1+(z1/zR)**2)))
+        #print(U-U0/(1+(z1/zR)**2) * np.exp(-2/(w0**2) * (x1**2 + y1**2) / (1+(z1/zR)**2)))
     else:
         U = -U0/(1+(z1/zR)**2) * np.exp(-2/(w0**2) * (x1**2 + y1**2) / (1+(z1/zR)**2))
    
@@ -95,10 +95,28 @@ def trapPotDerivs(r1,r2,U,w0,PotFlag,lambd=lambd_trap):
     zR = np.pi*w0**2/lambd
     z_term = np.sqrt(1+(z1/zR)**2)
     
-    a_x = 4/m*x1/(w0**2*z_term**2)*U
-    a_y = 4/m*y1/(w0**2*z_term**2)*U
-    a_z = 2/m*z1/(zR**4*w0**2*z_term**4)*(zR**2*(w0**2-2*(x1**2+y1**2)) + w0**2*z1**2)*U
-    
+    if PotFlag == 1:
+        #print(x1-x2)
+        C3 = 1.47797e-48  #Antonio notes in amu -> convert to SI
+        rr = np.sqrt((x1-x2)**2+(y1-y2)**2+(z1-z2)**2)
+        LJ = C3/(rr**3)
+        
+        rr_diff_x = -(3*C3*(x1-x2))/rr**5
+        rr_diff_y = -(3*C3*(y1-y2))/rr**5
+        rr_diff_z = -(3*C3*(z1-z2))/rr**5
+        
+        #print(rr_diff_x)
+        
+        a_x = 4/m*x1/(w0**2*z_term**2)*U + rr_diff_x
+        a_y = 4/m*y1/(w0**2*z_term**2)*U + rr_diff_y
+        a_z = 2/m*z1/(zR**4*w0**2*z_term**4)*(zR**2*(w0**2-2*(x1**2+y1**2)) + w0**2*z1**2)*U + rr_diff_z
+        
+        #print(a_x)
+    else:    
+        a_x = 4/m*x1/(w0**2*z_term**2)*U
+        a_y = 4/m*y1/(w0**2*z_term**2)*U
+        a_z = 2/m*z1/(zR**4*w0**2*z_term**4)*(zR**2*(w0**2-2*(x1**2+y1**2)) + w0**2*z1**2)*U
+        
     return [a_x, a_y, a_z]
 
 def kineticEnergy(v):
